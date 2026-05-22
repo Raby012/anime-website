@@ -4,8 +4,8 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   eslint: {
-    ignoreBuildErrors: true,
-  },
+  ignoreDuringBuilds: true,
+},
   async redirects() {
     return [
       {
