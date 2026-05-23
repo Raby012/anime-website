@@ -12,23 +12,21 @@ import anilist from "@/app/api/anilist/anilistMedias";
 import { SwiperSlide } from "swiper/react";
 
 const framerMotionVariants = {
-  initial: {
-    scale: 0,
-  },
+  initial: { scale: 0 },
   animate: {
     scale: 1,
-    transition: {
-      staggerChildren: 0.2,
-    },
+    transition: { staggerChildren: 0.2 },
   },
 };
 
 function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isBtnDisable, setIsBtnDisable] = useState<boolean>(false);
-
   const [fetchedData, setFetchedData] = useState<MediaData[]>([]);
-  const [currFetchPage, setCurrFetchPage] = useState(2); // next fetch will start on page 2
+  const [currFetchPage, setCurrFetchPage] = useState(2);
+
+  // ADD THIS - prevents crash when list is empty
+  if (!animesList || animesList.length === 0) return null;
 
   async function fetchAnimesListNextPage() {
     setIsLoading(true);
@@ -43,26 +41,16 @@ function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
       })
       .then((res) => res as MediaData[]);
 
-    if (
-      !listAnimesReleasingByPopularity ||
-      listAnimesReleasingByPopularity.length == 0
-    ) {
+    if (!listAnimesReleasingByPopularity || listAnimesReleasingByPopularity.length == 0) {
       setIsBtnDisable(true);
       setIsLoading(false);
-
       return;
     }
 
     if (listAnimesReleasingByPopularity.length <= 13) setIsBtnDisable(true);
 
-    const olderListWithNewResults = [
-      ...fetchedData,
-      ...listAnimesReleasingByPopularity,
-    ];
-
-    setFetchedData(olderListWithNewResults);
+    setFetchedData([...fetchedData, ...listAnimesReleasingByPopularity]);
     setCurrFetchPage(currFetchPage + 1);
-
     setIsLoading(false);
   }
 
@@ -72,34 +60,21 @@ function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
         <React.Fragment>
           <div id={styles.title_container}>
             <h2>Popular Animes to Watch Now</h2>
-
             <p>Most watched animes by days</p>
-
             <span></span>
-
             <Link href={"#"}>
               VIEW ALL <ChevronRightIcon width={16} height={16} />
             </Link>
           </div>
 
-          {/* SHOWS ONLY ON MOBILE */}
           <div id={styles.popular_list_container}>
             <SwiperCarouselContainer>
               {(fetchedData?.length > 0
                 ? [...animesList, ...fetchedData]
                 : animesList
               ).map((media, key) => (
-                <SwiperSlide
-                  key={key}
-                  className="custom_swiper_list_item"
-                  role="listitem"
-                >
-                  <MediaCard.Container
-                    key={key}
-                    positionIndex={key + 1}
-                    onDarkMode
-                    isHiddenOnDesktop
-                  >
+                <SwiperSlide key={key} className="custom_swiper_list_item" role="listitem">
+                  <MediaCard.Container key={key} positionIndex={key + 1} onDarkMode isHiddenOnDesktop>
                     <MediaCard.MediaImgLink
                       mediaInfo={media}
                       mediaId={media.id}
@@ -107,16 +82,8 @@ function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
                       formatOrType={media.format}
                       url={media.coverImage.large}
                     />
-
-                    <MediaCard.SmallTag
-                      seasonYear={media.seasonYear}
-                      tags={media.genres[0]}
-                    />
-
-                    <MediaCard.LinkTitle
-                      title={media.title.userPreferred}
-                      id={media.id}
-                    />
+                    <MediaCard.SmallTag seasonYear={media.seasonYear} tags={media.genres[0]} />
+                    <MediaCard.LinkTitle title={media.title.userPreferred} id={media.id} />
                   </MediaCard.Container>
                 </SwiperSlide>
               ))}
@@ -132,16 +99,8 @@ function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
                 formatOrType={media.format}
                 url={media.coverImage.large}
               />
-
-              <MediaCard.SmallTag
-                seasonYear={media.seasonYear}
-                tags={media.genres[0]}
-              />
-
-              <MediaCard.LinkTitle
-                title={media.title.userPreferred}
-                id={media.id}
-              />
+              <MediaCard.SmallTag seasonYear={media.seasonYear} tags={media.genres[0]} />
+              <MediaCard.LinkTitle title={media.title.userPreferred} id={media.id} />
             </MediaCard.Container>
           ))}
         </React.Fragment>
@@ -164,26 +123,16 @@ function PopularMediaSection({ animesList }: { animesList: MediaData[] }) {
                   formatOrType={media.format}
                   url={media.coverImage.large}
                 />
-
-                <MediaCard.SmallTag
-                  seasonYear={media.seasonYear}
-                  tags={media.genres[0]}
-                />
-
-                <MediaCard.LinkTitle
-                  title={media.title.userPreferred}
-                  id={media.id}
-                />
+                <MediaCard.SmallTag seasonYear={media.seasonYear} tags={media.genres[0]} />
+                <MediaCard.LinkTitle title={media.title.userPreferred} id={media.id} />
               </MediaCard.Container>
             ))}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SHOWS ONLY ON DESKTOP */}
       <div id={styles.navigation_link_container}>
         <span id={styles.line}></span>
-
         <motion.button
           aria-label={isLoading ? "wait the loading" : "+ View more"}
           onClick={() => fetchAnimesListNextPage()}
