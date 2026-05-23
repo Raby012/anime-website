@@ -12,15 +12,9 @@ const mediaChaptersRoute = require('./routes/mediaChaptersRoute');
 
 dotenv.config();
 
-const redisClient = redis.createClient(
-    process.env.DEV_MODE === 'true' ? {} : {
-        username: `${process.env.REDIS_USERNAME}`,
-        password: `${process.env.REDIS_PASSWORD}`,
-        socket: {
-            host: `${process.env.REDIS_HOST}`,
-            port: process.env.REDIS_PORT
-        }
-    });
+const redisClient = redis.createClient({
+    url: `rediss://${process.env.REDIS_USERNAME}:${process.env.REDIS_PASSWORD}@${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
+});
 
 (async () => {
 
@@ -35,17 +29,16 @@ const redisClient = redis.createClient(
     })
 
     await redisClient.connect();
-
     await redisClient.ping()
 
 })()
 
 const app = express();
-
 const port = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.CORS_ORIGIN || '*'
+}));
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -65,10 +58,9 @@ app.use("/chapters", mediaChaptersRoute)
 app.use("/news", newsRoute)
 app.use("/imdb", imdbRoute)
 
-// Start server
 app.listen(port, () => {
     console.log(`#### -> Starting AniProject API Server...`);
-    console.log(`#### -> Environment: ${process.env.DEV_MODE === 'true' ? 'Development' : 'Production'}`);
+    console.log(`#### -> Environment: Production`);
     console.log(`#### -> Server is live!`);
     console.log(`#### -> Listening on port: ${port}`);
 });
