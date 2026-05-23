@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { MediaDataFullInfo } from "@/app/ts/interfaces/anilistMediaData";
 import React from "react";
 import styles from "./page.module.css";
