@@ -42,21 +42,20 @@ function HeroCarousel({
   isOnMobileScreen: boolean;
 }) {
   const [[page, direction], setPage] = useState([0, 0]);
-
   const [autoPlayTrailer, setAutoPlayTrailer] = useState<boolean>(true);
+
+  // ADD THIS - prevents crash when list is empty
+  if (!animesList || animesList.length === 0) return null;
 
   useEffect(() => {
     if (localStorage.getItem("autoPlayTrailer") == undefined) {
       setAutoPlayTrailer(true);
       localStorage.setItem("autoPlayTrailer", "true");
-
       return;
     }
-
     setAutoPlayTrailer(localStorage.getItem("autoPlayTrailer") == "true");
   }, []);
 
-  // Slide Carousel Props
   const swipeConfidenceThreshold = 10000;
   const swipePower = (offset: number, velocity: number) => {
     return Math.abs(offset) * velocity;
@@ -77,7 +76,6 @@ function HeroCarousel({
     backgroundRepeat: "no-repeat",
   };
 
-  // change auto play trailer state
   function changeAutoPlayTrailerState() {
     localStorage.setItem("autoPlayTrailer", `${!autoPlayTrailer}`);
     setAutoPlayTrailer(!autoPlayTrailer);
@@ -96,7 +94,6 @@ function HeroCarousel({
 
   return (
     <section id={styles.hero_section_container}>
-      {/* CAROUSEL OF BCG IMG AND MEDIA TITLE*/}
       {animesList != undefined && (
         <AnimatePresence initial={true} custom={direction} mode="sync">
           <ul
@@ -121,7 +118,6 @@ function HeroCarousel({
               dragElastic={1}
               onDragEnd={(e, { offset, velocity }) => {
                 const swipe = swipePower(offset.x, velocity.x);
-
                 if (swipe < -swipeConfidenceThreshold) {
                   paginate(1);
                 } else if (swipe > swipeConfidenceThreshold) {
@@ -140,8 +136,7 @@ function HeroCarousel({
                       src={`https://www.youtube.com/embed/${animesList[currMediaOnScreenIndex].trailer.id}?controls=0&autoplay=1&mute=1&playsinline=1&loop=1&showinfo=0&playlist=${animesList[currMediaOnScreenIndex].trailer.id}`}
                       frameBorder={0}
                       title={
-                        animesList[currMediaOnScreenIndex].title
-                          .userPreferred + " Trailer"
+                        animesList[currMediaOnScreenIndex].title.userPreferred + " Trailer"
                       }
                     />
                   </motion.div>
@@ -151,77 +146,49 @@ function HeroCarousel({
               <div className={styles.carousel_position_wrapper}>
                 <div className={styles.item_info}>
                   <h2>
-                    <Link
-                      href={`/media/${animesList[currMediaOnScreenIndex]?.id}`}
-                    >
+                    <Link href={`/media/${animesList[currMediaOnScreenIndex]?.id}`}>
                       {animesList[currMediaOnScreenIndex]?.title.userPreferred}
                     </Link>
                   </h2>
 
-                  <div
-                    className={`${styles.item_info_inside} display_flex_row`}
-                  >
+                  <div className={`${styles.item_info_inside} display_flex_row`}>
                     {animesList[currMediaOnScreenIndex]?.seasonYear && (
-                      <p>
-                        {animesList[
-                          currMediaOnScreenIndex
-                        ].seasonYear.toString()}
-                      </p>
+                      <p>{animesList[currMediaOnScreenIndex].seasonYear.toString()}</p>
                     )}
                     {animesList[currMediaOnScreenIndex]?.genres &&
-                      animesList[currMediaOnScreenIndex]?.seasonYear !=
-                        undefined && <span>|</span>}
-
+                      animesList[currMediaOnScreenIndex]?.seasonYear != undefined && (
+                      <span>|</span>
+                    )}
                     {animesList[currMediaOnScreenIndex]?.genres && (
                       <p>
-                        <Link
-                          href={`/search?genre=[${animesList[currMediaOnScreenIndex]?.genres[0]?.toLowerCase()}]`}
-                        >
+                        <Link href={`/search?genre=[${animesList[currMediaOnScreenIndex]?.genres[0]?.toLowerCase()}]`}>
                           {animesList[currMediaOnScreenIndex]?.genres[0] || "Unknown"}
                         </Link>
                       </p>
                     )}
-                    {animesList[currMediaOnScreenIndex]?.seasonYear !=
-                      undefined &&
-                      animesList[currMediaOnScreenIndex]?.episodes !=
-                        undefined &&
-                      animesList[currMediaOnScreenIndex]?.nextAiringEpisode ==
-                        null && <span>|</span>}
-
+                    {animesList[currMediaOnScreenIndex]?.seasonYear != undefined &&
+                      animesList[currMediaOnScreenIndex]?.episodes != undefined &&
+                      animesList[currMediaOnScreenIndex]?.nextAiringEpisode == null && (
+                      <span>|</span>
+                    )}
                     {animesList[currMediaOnScreenIndex]?.episodes &&
                       animesList[currMediaOnScreenIndex].format != "MOVIE" &&
-                      animesList[currMediaOnScreenIndex]?.nextAiringEpisode ==
-                        null && (
+                      animesList[currMediaOnScreenIndex]?.nextAiringEpisode == null && (
                       <p>
-                        {animesList[
-                          currMediaOnScreenIndex
-                        ].episodes.toString()}{" "}
-                        {animesList[currMediaOnScreenIndex].episodes > 1
-                          ? "Episodes"
-                          : "Episode"}
+                        {animesList[currMediaOnScreenIndex].episodes.toString()}{" "}
+                        {animesList[currMediaOnScreenIndex].episodes > 1 ? "Episodes" : "Episode"}
                       </p>
                     )}
                     {animesList[currMediaOnScreenIndex]?.duration &&
                       animesList[currMediaOnScreenIndex].format == "MOVIE" && (
-                      <p>
-                        {animesList[currMediaOnScreenIndex].duration} Minutes
-                      </p>
+                      <p>{animesList[currMediaOnScreenIndex].duration} Minutes</p>
                     )}
-                    {animesList[currMediaOnScreenIndex]?.nextAiringEpisode && (
-                      <span>|</span>
-                    )}
-
+                    {animesList[currMediaOnScreenIndex]?.nextAiringEpisode && <span>|</span>}
                     {animesList[currMediaOnScreenIndex]?.nextAiringEpisode && (
                       <p>
-                        Ep{" "}
-                        {
-                          animesList[currMediaOnScreenIndex]?.nextAiringEpisode
-                            .episode
-                        }{" "}
-                        on{" "}
+                        Ep {animesList[currMediaOnScreenIndex]?.nextAiringEpisode.episode} on{" "}
                         {convertFromUnix(
-                          animesList[currMediaOnScreenIndex]?.nextAiringEpisode
-                            .airingAt,
+                          animesList[currMediaOnScreenIndex]?.nextAiringEpisode.airingAt,
                           { month: "long", year: undefined }
                         )}
                       </p>
@@ -229,18 +196,10 @@ function HeroCarousel({
                   </div>
 
                   <div className={styles.item_buttons}>
-                    <Link
-                      href={`/media/${animesList[currMediaOnScreenIndex]?.id}`}
-                    >
-                      {animesList[currMediaOnScreenIndex].format == "MANGA"
-                        ? "READ"
-                        : "WATCH"}{" "}
-                      NOW
+                    <Link href={`/media/${animesList[currMediaOnScreenIndex]?.id}`}>
+                      {animesList[currMediaOnScreenIndex].format == "MANGA" ? "READ" : "WATCH"} NOW
                     </Link>
-
-                    <AddToFavourites.Button
-                      mediaInfo={animesList[currMediaOnScreenIndex]}
-                    />
+                    <AddToFavourites.Button mediaInfo={animesList[currMediaOnScreenIndex]} />
                   </div>
                 </div>
               </div>
@@ -249,28 +208,15 @@ function HeroCarousel({
         </AnimatePresence>
       )}
 
-      {/* RECOMENDATIONS GRID */}
       <div id={styles.recomendations_position_wrapper}>
         <div id={styles.recomendations_container}>
           <h3>Todays Recomendation</h3>
 
-          {/* SHOWS ONLY ON MOBILE */}
           <div id={styles.swiper_list_container}>
             {animesList != undefined && (
-              <SwiperCarouselContainer
-                options={{
-                  slidesPerView: 2,
-                  bp480: 2,
-                  bp740: 3,
-                  bp1275: 3,
-                }}
-              >
+              <SwiperCarouselContainer options={{ slidesPerView: 2, bp480: 2, bp740: 3, bp1275: 3 }}>
                 {animesList.slice(0, 9).map((item, key) => (
-                  <SwiperSlide
-                    key={key}
-                    className="custom_swiper_list_item"
-                    role="listitem"
-                  >
+                  <SwiperSlide key={key} className="custom_swiper_list_item" role="listitem">
                     <ListItemHeroCarousel
                       animeInfo={item as MediaData}
                       handleFunction={handleBcgImgTransition as () => void}
@@ -281,31 +227,24 @@ function HeroCarousel({
             )}
           </div>
 
-          {/* SHOWS ONLY ON DESKTOP */}
           <ul>
             {animesList != undefined &&
-              animesList
-                .slice(0, 9)
-                .map(
-                  (media, key: number) =>
-                    media.bannerImage && (
-                      <ListItemHeroCarousel
-                        animeInfo={media}
-                        handleFunction={() => setPage([key, key])}
-                        key={key}
-                      />
-                    )
-                )}
+              animesList.slice(0, 9).map(
+                (media, key: number) =>
+                  media.bannerImage && (
+                    <ListItemHeroCarousel
+                      animeInfo={media}
+                      handleFunction={() => setPage([key, key])}
+                      key={key}
+                    />
+                  )
+              )}
           </ul>
         </div>
       </div>
 
-      {/* STOP/PLAY TRAILER BUTTON */}
       <div id={styles.stop_trailer_btn_container}>
-        <motion.button
-          onClick={() => changeAutoPlayTrailerState()}
-          whileTap={{ scale: 0.9 }}
-        >
+        <motion.button onClick={() => changeAutoPlayTrailerState()} whileTap={{ scale: 0.9 }}>
           {autoPlayTrailer ? (
             <>
               <EyeSlashSvg width={16} height={16} /> Stop Auto Play Trailer
