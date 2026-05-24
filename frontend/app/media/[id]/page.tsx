@@ -11,7 +11,6 @@ import ScoreRating from "@/app/components/DynamicAssets/ScoreRating";
 import { headers } from "next/headers";
 import { checkDeviceIsMobile } from "@/app/lib/checkMobileOrDesktop";
 import { convertFromUnix, getMediaReleaseDate } from "@/app/lib/formatDateUnix";
-import { getMediaInfoOnIMDB } from "@/app/api/consumet/consumetImdb";
 import { ImdbEpisode, ImdbMediaInfo } from "@/app/ts/interfaces/imdb";
 import MediaRelatedContainer from "./components/MediaRelatedContainer";
 import PageHeading from "./components/PageHeading";
@@ -19,26 +18,32 @@ import Reviews from "./components/Reviews";
 import { getMediaInfo } from "@/app/api/mediaInfo/anilist/mediaInfo";
 
 export async function generateMetadata({ params }: { params: { id: number } }) {
-  const mediaData = await getMediaInfo({
-    id: params.id,
-    accessToken: headers().get("Authorization")?.slice(7),
-  });
+  try {
+    const mediaData = await getMediaInfo({
+      id: params.id,
+      accessToken: headers().get("Authorization")?.slice(7),
+    }).catch(() => null);
 
-  return {
-    title: `${mediaData.title.romaji || mediaData.title.native} | AniProject`,
-    description:
-      mediaData.description ||
-      `See more info about ${mediaData.title.romaji || mediaData.title.native}`,
-    keywords: [
-      mediaData.title.romaji,
-      mediaData.title.english,
-      mediaData.title.native,
-      `${mediaData.title.romaji} anime`,
-      `${mediaData.title.romaji} release`,
-      `${mediaData.title.english} release`,
-      "anime info",
-    ],
-  };
+    if (!mediaData) return { title: "AniProject" };
+
+    return {
+      title: `${mediaData.title.romaji || mediaData.title.native} | AniProject`,
+      description:
+        mediaData.description ||
+        `See more info about ${mediaData.title.romaji || mediaData.title.native}`,
+      keywords: [
+        mediaData.title.romaji,
+        mediaData.title.english,
+        mediaData.title.native,
+        `${mediaData.title.romaji} anime`,
+        `${mediaData.title.romaji} release`,
+        `${mediaData.title.english} release`,
+        "anime info",
+      ],
+    };
+  } catch {
+    return { title: "AniProject" };
+  }
 }
 
 export default async function MediaPage({
@@ -50,54 +55,88 @@ export default async function MediaPage({
 }) {
   const isOnMobileScreen = checkDeviceIsMobile(headers()) || false;
 
-  const mediaInfo = (await getMediaInfo({
+  // Safe fetch with error handling
+  const mediaInfo = await getMediaInfo({
     id: params.id,
     accessToken: headers().get("Authorization")?.slice(7),
-  })) as MediaDataFullInfo;
+  }).catch(() => null) as MediaDataFullInfo | null;
 
-  // GET MEDIA INFO ON IMDB
-  const imdbMediaInfo = (await getMediaInfoOnIMDB({
-    search: true,
-    seachTitle: mediaInfo.title.romaji,
-    releaseYear: mediaInfo.startDate.year,
-  })) as ImdbMediaInfo;
+  if (!mediaInfo) {
+    return (
+      <main id={styles.container}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: "16px",
+          padding: "80px 20px",
+          color: "#fff",
+          textAlign: "center"
+        }}>
+          <p style={{ fontSize: "48px" }}>😔</p>
+          <h2>Failed to load anime info</h2>
+          <p style={{ color: "#aaa" }}>
+            This could be due to rate limiting. Please try again in a moment.
+          </p>
+          
+            href="/"
+            style={{
+              color: "#E11D48",
+              textDecoration: "none",
+              padding: "10px 24px",
+              border: "1px solid #E11D48",
+              borderRadius: "6px"
+            }}
+          >
+            ← Go Home
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  // IMDB info - safely fetch with null fallback (Consumet may be dead)
+  let imdbMediaInfo: ImdbMediaInfo | null = null;
+  try {
+    const { getMediaInfoOnIMDB } = await import("@/app/api/consumet/consumetImdb");
+    imdbMediaInfo = await getMediaInfoOnIMDB({
+      search: true,
+      seachTitle: mediaInfo.title.romaji,
+      releaseYear: mediaInfo.startDate?.year,
+    }).catch(() => null) as ImdbMediaInfo | null;
+  } catch {
+    imdbMediaInfo = null;
+  }
 
   function getCrunchyrollEpisodes() {
-    const sortEpisodesByEpisode = mediaInfo.streamingEpisodes?.sort((a, b) => {
+    const sortEpisodesByEpisode = mediaInfo!.streamingEpisodes?.sort((a, b) => {
       const numA = Number(
         a.title.slice(a.title?.search(/\b \b/), a.title?.search(/\b - \b/))
       );
       const numB = Number(
         b.title.slice(b.title?.search(/\b \b/), b.title?.search(/\b - \b/))
       );
-
       return numA - numB;
     });
-
-    return sortEpisodesByEpisode;
+    return sortEpisodesByEpisode || [];
   }
 
-  // GET MEDIA EPISODES ON IMDB
-  function getImdbEpisodesListWithNoSeasons() {
+  function getImdbEpisodesListWithNoSeasons(): ImdbEpisode[] {
+    if (!imdbMediaInfo?.seasons) return [];
     const imdbEpisodesMapped: ImdbEpisode[] = [];
-
-    imdbMediaInfo?.seasons?.map((itemA) =>
+    imdbMediaInfo.seasons.map((itemA) =>
       itemA.episodes?.map((itemB) => imdbEpisodesMapped.push(itemB))
     );
-
     return imdbEpisodesMapped;
   }
 
   function randomizeBcgImg() {
     const backgroundImgs: { url: string }[] = [];
-
-    if (mediaInfo?.bannerImage)
-      backgroundImgs.push({ url: mediaInfo?.bannerImage });
-    if (imdbMediaInfo?.cover)
-      backgroundImgs.push({ url: imdbMediaInfo?.cover });
-
-    const randomNumber = Math.floor(Math.random() * backgroundImgs?.length);
-
+    if (mediaInfo?.bannerImage) backgroundImgs.push({ url: mediaInfo.bannerImage });
+    if (imdbMediaInfo?.cover) backgroundImgs.push({ url: imdbMediaInfo.cover });
+    if (backgroundImgs.length === 0) return undefined;
+    const randomNumber = Math.floor(Math.random() * backgroundImgs.length);
     return backgroundImgs[randomNumber]?.url;
   }
 
@@ -113,7 +152,7 @@ export default async function MediaPage({
 
   return (
     <main id={styles.container}>
-      {/* BANNER or BACKGROUND COLOR*/}
+      {/* BANNER or BACKGROUND COLOR */}
       <div
         id={styles.banner_background_container}
         style={{ background: bcgImgBasedOnScreenDisplay() }}
@@ -136,13 +175,13 @@ export default async function MediaPage({
 
         <section id={styles.info_container}>
           <div id={styles.description_episodes_related_container}>
+
             {/* NEXT EPISODE */}
             {isOnMobileScreen == true &&
               mediaInfo.nextAiringEpisode &&
               mediaInfo.format != "MOVIE" && (
                 <div id={styles.next_episode_container}>
                   <h2 className={styles.heading_style}>NEXT EPISODE</h2>
-
                   <p>
                     <span>Episode {mediaInfo.nextAiringEpisode.episode}</span>{" "}
                     on{" "}
@@ -159,18 +198,15 @@ export default async function MediaPage({
             {/* DESCRIPTION */}
             <section id={styles.description_container}>
               <h2 className={styles.heading_style}>DESCRIPTION</h2>
-
               {mediaInfo.description && (
                 <span>{parse(mediaInfo.description) || "Not Available"}</span>
               )}
             </section>
 
             {/* CAST */}
-            {mediaInfo.characters.edges[0] && (
+            {mediaInfo.characters?.edges?.[0] && (
               <section id={styles.cast_container}>
                 <h2 className={styles.heading_style}>CAST</h2>
-
-                {/* WHEN HOVERING, FLIP IMAGE AND SHOW THE ACTOR */}
                 <div>
                   <ul className="display_flex_row">
                     {mediaInfo.characters.edges.map((character, key) => (
@@ -184,40 +220,21 @@ export default async function MediaPage({
                               sizes="90px"
                             />
                           </div>
-
                           <h3>{character.node.name.full}</h3>
                         </div>
 
-                        {/* SHOWS ACTOR ONLY FOR ANIMES  */}
                         {mediaInfo.type == "ANIME" &&
-                          character.voiceActorRoles[0] && (
+                          character.voiceActorRoles?.[0] && (
                             <div className={styles.actor_container}>
                               <div className={styles.img_container}>
                                 <Image
-                                  src={
-                                    character.voiceActorRoles[0] &&
-                                    character.voiceActorRoles[0].voiceActor
-                                      .image.large
-                                  }
-                                  alt={
-                                    `${
-                                      character.voiceActorRoles[0] &&
-                                      character.voiceActorRoles[0].voiceActor
-                                        .name.full
-                                    } voiceover for ${
-                                      character.node.name.full
-                                    }` || "No Name Actor"
-                                  }
+                                  src={character.voiceActorRoles[0].voiceActor.image.large}
+                                  alt={`${character.voiceActorRoles[0].voiceActor.name.full} voiceover for ${character.node.name.full}` || "No Name Actor"}
                                   fill
                                   sizes="90px"
                                 />
                               </div>
-
-                              <h3>
-                                {character.voiceActorRoles[0] &&
-                                  character.voiceActorRoles[0].voiceActor.name
-                                    .full}
-                              </h3>
+                              <h3>{character.voiceActorRoles[0].voiceActor.name.full}</h3>
                             </div>
                           )}
                       </li>
@@ -239,7 +256,7 @@ export default async function MediaPage({
                       mediaInfo.mediaListEntry?.progress || undefined
                     }
                     imdb={{
-                      mediaSeasons: imdbMediaInfo?.seasons,
+                      mediaSeasons: imdbMediaInfo?.seasons || null,
                       episodesList: getImdbEpisodesListWithNoSeasons(),
                     }}
                   />
@@ -250,7 +267,6 @@ export default async function MediaPage({
             {mediaInfo.type == "MANGA" && (
               <section>
                 <h2 className={styles.heading_style}>CHAPTERS</h2>
-
                 <MangaChaptersContainer
                   mediaInfo={mediaInfo}
                   chaptersReadOnAnilist={
@@ -260,88 +276,71 @@ export default async function MediaPage({
               </section>
             )}
 
-            {/* RELATIONED TO THIS MEDIA */}
-            {mediaInfo.relations.nodes[0] && (
+            {/* RELATED TO THIS MEDIA */}
+            {mediaInfo.relations?.nodes?.[0] && (
               <section id={styles.related_container}>
                 <div className="display_flex_row space_beetween align_items_center display_wrap">
                   <h2 className={styles.heading_style}>
                     RELATED TO {mediaInfo.title.romaji.toUpperCase()}
                   </h2>
                 </div>
-
                 <ul>
-                  <MediaRelatedContainer
-                    mediaList={mediaInfo.relations.nodes}
-                  />
+                  <MediaRelatedContainer mediaList={mediaInfo.relations.nodes} />
                 </ul>
               </section>
             )}
 
             {/* REVIEWS SECTION */}
-            {mediaInfo.reviews?.nodes.length > 0 && (
+            {mediaInfo.reviews?.nodes?.length > 0 && (
               <Reviews reviews={mediaInfo.reviews.nodes} />
             )}
 
-            {/* RECOMMENDATIONS ACCORDING TO THIS MEDIA */}
-            {mediaInfo.recommendations.edges[0] && (
+            {/* RECOMMENDATIONS */}
+            {mediaInfo.recommendations?.edges?.[0] && (
               <section id={styles.similar_container}>
                 <h2 className={styles.heading_style}>
                   SIMILAR {mediaInfo.type.toUpperCase()}S YOU MAY LIKE
                 </h2>
-
                 <ul>
-                  {mediaInfo?.recommendations.edges
-                    .slice(0, 12)
-                    .map((media, key) => (
-                      <li key={key}>
-                        <MediaCard.Container positionIndex={key + 1} onDarkMode>
-                          <MediaCard.MediaImgLink
-                            mediaInfo={media.node.mediaRecommendation}
-                            mediaId={media.node.mediaRecommendation?.id}
-                            title={
-                              media.node.mediaRecommendation?.title
-                                .userPreferred ||
-                              media.node.mediaRecommendation?.title.romaji
-                            }
-                            formatOrType={
-                              media.node.mediaRecommendation?.format
-                            }
-                            url={
-                              media.node.mediaRecommendation?.coverImage.large
-                            }
-                          />
-
-                          <MediaCard.SmallTag
-                            seasonYear={
-                              media.node.mediaRecommendation?.seasonYear
-                            }
-                            tags={media.node.mediaRecommendation?.genres[0]}
-                          />
-
-                          <MediaCard.LinkTitle
-                            title={
-                              media.node.mediaRecommendation?.title
-                                .userPreferred ||
-                              media.node.mediaRecommendation?.title.romaji
-                            }
-                            id={media.node.mediaRecommendation?.id}
-                          />
-                        </MediaCard.Container>
-                      </li>
-                    ))}
+                  {mediaInfo.recommendations.edges.slice(0, 12).map((media, key) => (
+                    <li key={key}>
+                      <MediaCard.Container positionIndex={key + 1} onDarkMode>
+                        <MediaCard.MediaImgLink
+                          mediaInfo={media.node.mediaRecommendation}
+                          mediaId={media.node.mediaRecommendation?.id}
+                          title={
+                            media.node.mediaRecommendation?.title.userPreferred ||
+                            media.node.mediaRecommendation?.title.romaji
+                          }
+                          formatOrType={media.node.mediaRecommendation?.format}
+                          url={media.node.mediaRecommendation?.coverImage.large}
+                        />
+                        <MediaCard.SmallTag
+                          seasonYear={media.node.mediaRecommendation?.seasonYear}
+                          tags={media.node.mediaRecommendation?.genres?.[0]}
+                        />
+                        <MediaCard.LinkTitle
+                          title={
+                            media.node.mediaRecommendation?.title.userPreferred ||
+                            media.node.mediaRecommendation?.title.romaji
+                          }
+                          id={media.node.mediaRecommendation?.id}
+                        />
+                      </MediaCard.Container>
+                    </li>
+                  ))}
                 </ul>
               </section>
             )}
           </div>
 
           <div id={styles.hype_container}>
-            {/* NEXT EPISODE */}
+            {/* NEXT EPISODE - DESKTOP */}
             {isOnMobileScreen == false &&
               mediaInfo.nextAiringEpisode &&
               mediaInfo.format != "MOVIE" && (
                 <div id={styles.next_episode_container}>
                   <h2 className={styles.heading_style}>NEXT EPISODE</h2>
-
                   <p>
                     <span>Episode {mediaInfo.nextAiringEpisode.episode}</span>{" "}
                     on{" "}
@@ -356,10 +355,9 @@ export default async function MediaPage({
               )}
 
             {/* SCORE */}
-            {(mediaInfo.averageScore || imdbMediaInfo?.rating != 0) && (
+            {(mediaInfo.averageScore || (imdbMediaInfo?.rating && imdbMediaInfo.rating != 0)) && (
               <div id={styles.score_container}>
                 <h2 className={styles.heading_style}>SCORE</h2>
-
                 <ul>
                   {mediaInfo.averageScore && (
                     <li className="display_flex_row align_items_center">
@@ -367,23 +365,20 @@ export default async function MediaPage({
                         ratingScore={mediaInfo.averageScore / 2 / 10}
                         source="anilist"
                       />
-
                       <span style={{ marginLeft: "64px" }}>
                         {`(${mediaInfo.averageScore / 2 / 10}/5)`}
                       </span>
                     </li>
                   )}
-
-                  {imdbMediaInfo?.rating != 0 &&
-                    imdbMediaInfo?.rating != null && (
-                      <li className="display_flex_row align_items_center">
-                        <ScoreRating
-                          ratingScore={Number(imdbMediaInfo.rating.toFixed(1))}
-                          source="imdb"
-                          ratingType="string"
-                        />
-                      </li>
-                    )}
+                  {imdbMediaInfo?.rating != 0 && imdbMediaInfo?.rating != null && (
+                    <li className="display_flex_row align_items_center">
+                      <ScoreRating
+                        ratingScore={Number(imdbMediaInfo.rating.toFixed(1))}
+                        source="imdb"
+                        ratingType="string"
+                      />
+                    </li>
+                  )}
                 </ul>
               </div>
             )}
@@ -405,7 +400,6 @@ export default async function MediaPage({
 
             <div id={styles.more_info_container}>
               <h2 className={styles.heading_style}>MORE INFO</h2>
-
               <ul>
                 {mediaInfo.endDate?.year && (
                   <li>
@@ -419,8 +413,7 @@ export default async function MediaPage({
                     </p>
                   </li>
                 )}
-
-                {mediaInfo.studios?.edges[0]?.node && (
+                {mediaInfo.studios?.edges?.[0]?.node && (
                   <li>
                     <p>
                       Main Studio{" "}
@@ -430,7 +423,6 @@ export default async function MediaPage({
                     </p>
                   </li>
                 )}
-
                 {mediaInfo.trending != 0 && (
                   <li>
                     <p>
@@ -441,7 +433,6 @@ export default async function MediaPage({
                     </p>
                   </li>
                 )}
-
                 {mediaInfo.favourites && (
                   <li>
                     <p>
@@ -455,7 +446,6 @@ export default async function MediaPage({
                     </p>
                   </li>
                 )}
-
                 {mediaInfo.hashtag && (
                   <li>
                     <p>
