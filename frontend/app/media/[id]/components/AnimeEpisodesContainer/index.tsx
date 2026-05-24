@@ -76,8 +76,10 @@ export default function EpisodesContainer({
   const [isLoadingSeasons, setIsLoadingSeasons] = useState<boolean>(false);
   const [imdbIdFromTmdb, setImdbIdFromTmdb] = useState<string | null>(null);
 
+  const mediaAny = mediaInfo as any;
+
   // Get IMDB ID from AniList external links (fallback)
-  const imdbLinkFromAnilist = (mediaInfo as any).externalLinks?.find(
+  const imdbLinkFromAnilist = mediaAny.externalLinks?.find(
     (link: { site: string; url: string }) =>
       link.site === "IMDb" || link.url?.includes("imdb.com")
   );
@@ -95,43 +97,62 @@ export default function EpisodesContainer({
     async function fetchFromTmdb() {
       setIsLoadingSeasons(true);
       try {
-        const title =
-          (mediaInfo as any).title?.english ||
-          (mediaInfo as any).title?.romaji ||
-          (mediaInfo as any).title?.userPreferred ||
-          "";
+        const year = mediaAny.seasonYear || mediaAny.startDate?.year || "";
 
-        if (!title) return;
+        // Try all available titles
+        const titles = [
+          mediaAny.title?.english,
+          mediaAny.title?.romaji,
+          mediaAny.title?.userPreferred,
+        ].filter(Boolean);
 
-        // Search TMDB by anime title
-        const searchRes = await fetch(
-          `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&page=1`
-        );
-        const searchData = await searchRes.json();
-        const show = searchData.results?.[0];
+        let show = null;
+
+        for (const searchTitle of titles) {
+          if (!searchTitle) continue;
+
+          // Try with year first
+          if (year) {
+            const res = await fetch(
+              `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}&first_air_date_year=${year}`
+            );
+            const data = await res.json();
+            if (data.results?.length > 0) {
+              show = data.results[0];
+              break;
+            }
+          }
+
+          // Try without year
+          const res2 = await fetch(
+            `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}`
+          );
+          const data2 = await res2.json();
+          if (data2.results?.length > 0) {
+            show = data2.results[0];
+            break;
+          }
+        }
 
         if (!show) {
           setIsLoadingSeasons(false);
           return;
         }
 
-        // Get full show details with external IDs and seasons
+        // Get full show details with external IDs
         const showRes = await fetch(
           `https://api.themoviedb.org/3/tv/${show.id}?api_key=${TMDB_KEY}&append_to_response=external_ids`
         );
         const showData = await showRes.json();
 
-        // Get IMDB ID from TMDB external IDs
+        // Get IMDB ID
         const tmdbImdbId = showData.external_ids?.imdb_id;
-        if (tmdbImdbId) {
-          setImdbIdFromTmdb(tmdbImdbId);
-        }
+        if (tmdbImdbId) setImdbIdFromTmdb(tmdbImdbId);
 
-        // Get seasons (skip specials - season 0)
+        // Get seasons - skip specials (season 0)
         const seasons: TmdbSeason[] = (showData.seasons || []).filter(
           (s: TmdbSeason) => s.season_number > 0
         );
-
         setTmdbSeasons(seasons);
 
         if (seasons.length > 0) {
@@ -145,7 +166,7 @@ export default function EpisodesContainer({
     }
 
     fetchFromTmdb();
-  }, [TMDB_KEY, (mediaInfo as any).id]);
+  }, [TMDB_KEY, mediaAny.id]);
 
   // Update episode count when season changes
   useEffect(() => {
@@ -159,10 +180,10 @@ export default function EpisodesContainer({
     }
   }, [selectedSeason, tmdbSeasons]);
 
-  // Total episodes for current season or anime
+  // Total episodes
   const totalEpisodes =
     currSeasonEpisodes ||
-    (mediaInfo as any).episodes ||
+    mediaAny.episodes ||
     crunchyrollInitialEpisodes.length ||
     imdb.episodesList.length ||
     12;
@@ -241,7 +262,9 @@ export default function EpisodesContainer({
                 padding: "5px 12px",
                 borderRadius: "4px",
                 border: "none",
-                background: selectedSeason === season.season_number ? "#E11D48" : "#333",
+                background: selectedSeason === season.season_number
+                  ? "#E11D48"
+                  : "#333",
                 color: "#fff",
                 cursor: "pointer",
                 fontSize: "13px",
@@ -255,7 +278,8 @@ export default function EpisodesContainer({
       )}
 
       {/* Season Selector - IMDB fallback */}
-      {!isMovie && tmdbSeasons.length <= 1 && imdb.mediaSeasons && imdb.mediaSeasons.length > 1 && (
+      {!isMovie && tmdbSeasons.length <= 1 &&
+        imdb.mediaSeasons && imdb.mediaSeasons.length > 1 && (
         <div style={{
           padding: "8px 16px",
           display: "flex",
@@ -301,9 +325,20 @@ export default function EpisodesContainer({
             justifyContent: "center",
             background: "#111",
             borderRadius: "8px",
-            color: "#fff"
+            color: "#fff",
+            flexDirection: "column",
+            gap: "12px"
           }}>
-            <p>Loading streaming info...</p>
+            <div style={{
+              width: "40px",
+              height: "40px",
+              border: "3px solid #333",
+              borderTop: "3px solid #E11D48",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite"
+            }} />
+            <p style={{ color: "#aaa" }}>Finding streaming source...</p>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : embedUrl ? (
           <iframe
@@ -337,7 +372,7 @@ export default function EpisodesContainer({
             <p style={{ color: "#aaa", textAlign: "center", maxWidth: "360px", fontSize: "14px" }}>
               {!TMDB_KEY
                 ? "TMDB API key not configured."
-                : "Could not find this anime on streaming servers."}
+                : "Could not find this anime on streaming servers. Try a different server."}
             </p>
           </div>
         )}
@@ -357,7 +392,6 @@ export default function EpisodesContainer({
           }}>
             <p style={{ color: "#aaa", fontSize: "13px" }}>
               Season {selectedSeason} • Episode {selectedEpisode} / {totalEpisodes}
-              {isLoadingSeasons && " • Loading..."}
             </p>
           </div>
 
