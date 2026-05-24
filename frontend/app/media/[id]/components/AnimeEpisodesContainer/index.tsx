@@ -74,57 +74,78 @@ export default function EpisodesContainer({
   const [tmdbSeasons, setTmdbSeasons] = useState<TmdbSeason[]>([]);
   const [currSeasonEpisodes, setCurrSeasonEpisodes] = useState<number>(0);
   const [isLoadingSeasons, setIsLoadingSeasons] = useState<boolean>(false);
+  const [imdbIdFromTmdb, setImdbIdFromTmdb] = useState<string | null>(null);
 
-  // Get IMDB ID from external links
-  const imdbLink = (mediaInfo as any).externalLinks?.find(
+  // Get IMDB ID from AniList external links (fallback)
+  const imdbLinkFromAnilist = (mediaInfo as any).externalLinks?.find(
     (link: { site: string; url: string }) =>
       link.site === "IMDb" || link.url?.includes("imdb.com")
   );
-  const imdbId = imdbLink?.url?.match(/tt\d+/)?.[0];
+  const imdbIdFromAnilist = imdbLinkFromAnilist?.url?.match(/tt\d+/)?.[0];
+
+  // Use whichever IMDB ID we have
+  const imdbId = imdbIdFromTmdb || imdbIdFromAnilist || null;
 
   const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
-  // Fetch TMDB seasons info
+  // Fetch TMDB data by anime title
   useEffect(() => {
-    if (!imdbId || !TMDB_KEY || mediaInfo.format === "MOVIE") return;
+    if (!TMDB_KEY) return;
 
-    async function fetchTmdbSeasons() {
+    async function fetchFromTmdb() {
       setIsLoadingSeasons(true);
       try {
-        // First find TMDB ID from IMDB ID
-        const findRes = await fetch(
-          `https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`
-        );
-        const findData = await findRes.json();
-        const tmdbId = findData.tv_results?.[0]?.id;
+        const title =
+          (mediaInfo as any).title?.english ||
+          (mediaInfo as any).title?.romaji ||
+          (mediaInfo as any).title?.userPreferred ||
+          "";
 
-        if (!tmdbId) {
+        if (!title) return;
+
+        // Search TMDB by anime title
+        const searchRes = await fetch(
+          `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&page=1`
+        );
+        const searchData = await searchRes.json();
+        const show = searchData.results?.[0];
+
+        if (!show) {
           setIsLoadingSeasons(false);
           return;
         }
 
-        // Get show details with seasons
+        // Get full show details with external IDs and seasons
         const showRes = await fetch(
-          `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_KEY}`
+          `https://api.themoviedb.org/3/tv/${show.id}?api_key=${TMDB_KEY}&append_to_response=external_ids`
         );
         const showData = await showRes.json();
 
-        const seasons = showData.seasons?.filter(
+        // Get IMDB ID from TMDB external IDs
+        const tmdbImdbId = showData.external_ids?.imdb_id;
+        if (tmdbImdbId) {
+          setImdbIdFromTmdb(tmdbImdbId);
+        }
+
+        // Get seasons (skip specials - season 0)
+        const seasons: TmdbSeason[] = (showData.seasons || []).filter(
           (s: TmdbSeason) => s.season_number > 0
-        ) || [];
+        );
 
         setTmdbSeasons(seasons);
+
         if (seasons.length > 0) {
           setCurrSeasonEpisodes(seasons[0].episode_count);
         }
+
       } catch (err) {
         console.error("TMDB fetch error:", err);
       }
       setIsLoadingSeasons(false);
     }
 
-    fetchTmdbSeasons();
-  }, [imdbId, TMDB_KEY]);
+    fetchFromTmdb();
+  }, [TMDB_KEY, (mediaInfo as any).id]);
 
   // Update episode count when season changes
   useEffect(() => {
@@ -138,8 +159,9 @@ export default function EpisodesContainer({
     }
   }, [selectedSeason, tmdbSeasons]);
 
-  // Total episodes for current season
-  const totalEpisodes = currSeasonEpisodes ||
+  // Total episodes for current season or anime
+  const totalEpisodes =
+    currSeasonEpisodes ||
     (mediaInfo as any).episodes ||
     crunchyrollInitialEpisodes.length ||
     imdb.episodesList.length ||
@@ -164,13 +186,15 @@ export default function EpisodesContainer({
     (_, i) => startEp + i
   );
 
+  const isMovie = mediaInfo.format === "MOVIE";
+
   return (
     <div>
       <div id={styles.episodes_heading}>
         <h2 className={styles.heading_style}>EPISODES</h2>
       </div>
 
-      {/* Source Selector */}
+      {/* Server Selector */}
       <div style={{
         padding: "8px 16px",
         display: "flex",
@@ -199,8 +223,8 @@ export default function EpisodesContainer({
         ))}
       </div>
 
-      {/* Season Selector */}
-      {mediaInfo.format !== "MOVIE" && tmdbSeasons.length > 1 && (
+      {/* Season Selector - TMDB */}
+      {!isMovie && tmdbSeasons.length > 1 && (
         <div style={{
           padding: "8px 16px",
           display: "flex",
@@ -230,8 +254,8 @@ export default function EpisodesContainer({
         </div>
       )}
 
-      {/* IMDB seasons fallback */}
-      {mediaInfo.format !== "MOVIE" && tmdbSeasons.length === 0 && imdb.mediaSeasons && imdb.mediaSeasons.length > 1 && (
+      {/* Season Selector - IMDB fallback */}
+      {!isMovie && tmdbSeasons.length <= 1 && imdb.mediaSeasons && imdb.mediaSeasons.length > 1 && (
         <div style={{
           padding: "8px 16px",
           display: "flex",
@@ -252,7 +276,9 @@ export default function EpisodesContainer({
                 padding: "5px 12px",
                 borderRadius: "4px",
                 border: "none",
-                background: selectedSeason === (season.season_number || key + 1) ? "#E11D48" : "#333",
+                background: selectedSeason === (season.season_number || key + 1)
+                  ? "#E11D48"
+                  : "#333",
                 color: "#fff",
                 cursor: "pointer",
                 fontSize: "13px"
@@ -266,9 +292,22 @@ export default function EpisodesContainer({
 
       {/* Video Player */}
       <div style={{ padding: "16px" }}>
-        {embedUrl ? (
+        {isLoadingSeasons ? (
+          <div style={{
+            width: "100%",
+            height: "480px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#111",
+            borderRadius: "8px",
+            color: "#fff"
+          }}>
+            <p>Loading streaming info...</p>
+          </div>
+        ) : embedUrl ? (
           <iframe
-            key={`${embedUrl}-${selectedSource}`}
+            key={`${embedUrl}-${selectedSource}-${selectedSeason}-${selectedEpisode}`}
             src={embedUrl}
             width="100%"
             height="480px"
@@ -296,14 +335,16 @@ export default function EpisodesContainer({
             <p style={{ fontSize: "32px" }}>😔</p>
             <h3>Streaming Unavailable</h3>
             <p style={{ color: "#aaa", textAlign: "center", maxWidth: "360px", fontSize: "14px" }}>
-              No streaming source found. This anime may not have an IMDB link in AniList.
+              {!TMDB_KEY
+                ? "TMDB API key not configured."
+                : "Could not find this anime on streaming servers."}
             </p>
           </div>
         )}
       </div>
 
       {/* Episode List */}
-      {mediaInfo.format !== "MOVIE" && totalEpisodes > 0 && (
+      {!isMovie && totalEpisodes > 0 && (
         <div style={{ padding: "0 16px 16px" }}>
 
           <div style={{
@@ -316,19 +357,20 @@ export default function EpisodesContainer({
           }}>
             <p style={{ color: "#aaa", fontSize: "13px" }}>
               Season {selectedSeason} • Episode {selectedEpisode} / {totalEpisodes}
-              {isLoadingSeasons && " • Loading season info..."}
+              {isLoadingSeasons && " • Loading..."}
             </p>
           </div>
 
-          {/* Page navigation for long series like Shin-chan */}
+          {/* Page navigation for long series */}
           {totalPages > 1 && (
             <div style={{
               display: "flex",
               gap: "6px",
               flexWrap: "wrap",
-              marginBottom: "12px"
+              marginBottom: "12px",
+              alignItems: "center"
             }}>
-              <span style={{ color: "#aaa", fontSize: "12px", alignSelf: "center" }}>Episodes:</span>
+              <span style={{ color: "#aaa", fontSize: "12px" }}>Episodes:</span>
               {Array.from({ length: totalPages }, (_, i) => (
                 <button
                   key={i}
@@ -352,7 +394,7 @@ export default function EpisodesContainer({
             </div>
           )}
 
-          {/* Episode buttons */}
+          {/* Episode buttons grid */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(55px, 1fr))",
