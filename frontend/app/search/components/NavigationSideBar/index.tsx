@@ -40,6 +40,11 @@ function NavigationSideBar({ isMobile }: { isMobile: boolean }) {
       Array.from(searchParams.entries())
     );
 
+    
+    const currSearchParams = new URLSearchParams(
+      Array.from(searchParams.entries())
+    );
+
     setLoading(true);
 
     switch (queryType) {
