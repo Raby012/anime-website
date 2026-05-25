@@ -50,17 +50,23 @@ const SOURCES: Source[] = [
     getUrl: (id, s, e, movie) =>
       movie ? `https://www.2embed.cc/embed/${id}` : `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,
   },
+  // Replaced dead EmbedSu → VidSrc CC
   {
-    name: "EmbedSu",
+    name: "VidSrc CC",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://embed.su/embed/movie/${id}` : `https://embed.su/embed/tv/${id}/${s}/${e}`,
+      movie ? `https://vidsrc.cc/v2/embed/movie/${id}` : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`,
   },
+  // Replaced dead AutoEmbed → Smashy Stream
   {
-    name: "AutoEmbed",
+    name: "SmashyStream",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://autoembed.cc/movie/imdb/${id}` : `https://autoembed.cc/tv/imdb/${id}-${s}-${e}`,
+      movie
+        ? `https://player.smashy.stream/movie/${id}`
+        : `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`,
   },
 ];
+
+
 
 const EPISODES_PER_PAGE = 100;
 
