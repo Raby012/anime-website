@@ -69,35 +69,11 @@ export default async function MediaPage({
   if (!mediaInfo) {
     return (
       <main id={styles.container}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            gap: "16px",
-            padding: "80px 20px",
-            color: "#fff",
-            textAlign: "center",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "16px", padding: "80px 20px", color: "#fff", textAlign: "center" }}>
           <p style={{ fontSize: "48px" }}>😔</p>
           <h2>Failed to load anime info</h2>
-          <p style={{ color: "#aaa" }}>
-            This could be due to rate limiting or an invalid ID. Please try again in a moment.
-          </p>
-          
-            href="/"
-            style={{
-              color: "#E11D48",
-              textDecoration: "none",
-              padding: "10px 24px",
-              border: "1px solid #E11D48",
-              borderRadius: "6px",
-            }}
-          >
-            ← Go Home
-          </a>
+          <p style={{ color: "#aaa" }}>Rate limiting or invalid ID. Try again shortly.</p>
+          <a href="/" style={{ color: "#E11D48", textDecoration: "none", padding: "10px 24px", border: "1px solid #E11D48", borderRadius: "6px" }}>← Go Home</a>
         </div>
       </main>
     );
@@ -117,12 +93,8 @@ export default async function MediaPage({
 
   function getCrunchyrollEpisodes() {
     const sortEpisodesByEpisode = mediaInfo!.streamingEpisodes?.sort((a, b) => {
-      const numA = Number(
-        a.title.slice(a.title?.search(/\b \b/), a.title?.search(/\b - \b/))
-      );
-      const numB = Number(
-        b.title.slice(b.title?.search(/\b \b/), b.title?.search(/\b - \b/))
-      );
+      const numA = Number(a.title.slice(a.title?.search(/\b \b/), a.title?.search(/\b - \b/)));
+      const numB = Number(b.title.slice(b.title?.search(/\b \b/), b.title?.search(/\b - \b/)));
       return numA - numB;
     });
     return sortEpisodesByEpisode || [];
@@ -224,7 +196,6 @@ export default async function MediaPage({
                           </div>
                           <h3>{character.node.name.full}</h3>
                         </div>
-
                         {mediaInfo!.type == "ANIME" &&
                           character.voiceActorRoles?.[0] && (
                             <div className={styles.actor_container}>
