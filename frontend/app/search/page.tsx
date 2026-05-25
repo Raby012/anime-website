@@ -42,11 +42,25 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
         search: searchParams.title || undefined,
         page: searchParams.page ? Number(searchParams.page) : 1,
       }) as any[];
-      results = mangaResults || [];
+
+      // Normalize AniList manga data to match MediaOnJSONFile shape
+      // so ResultsContainer can render it correctly
+      results = (mangaResults || []).map((m: any) => ({
+        anilistId: String(m.id),
+        title: m.title?.userPreferred || m.title?.romaji || "Unknown",
+        picture: m.coverImage?.large || m.coverImage?.medium || "",
+        tags: m.genres || [],
+        animeSeason: { year: m.seasonYear || m.startDate?.year || 0 },
+        type: m.format || "MANGA",
+        description: m.description || "",
+      }));
+
       totalLength = results.length;
+      lastUpdate = new Date().toISOString();
     } catch {
       results = [];
       totalLength = 0;
+      lastUpdate = new Date().toISOString();
     }
   } else {
     const sortedMedias = await animeDatabaseSearchMedias({ searchParams });
@@ -58,10 +72,16 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
   return (
     <main id={styles.container}>
       <div style={{ display:"flex", gap:"8px", padding:"16px 16px 0", borderBottom:"1px solid #222", marginBottom:"8px" }}>
-        <a href={`/search?type=anime${searchParams.title ? `&title=${searchParams.title}` : ""}`} style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: !isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: !isManga ? "bold" : "normal", fontSize:"14px" }}>
+        
+          href={`/search?type=anime${searchParams.title ? `&title=${searchParams.title}` : ""}`}
+          style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: !isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: !isManga ? "bold" : "normal", fontSize:"14px" }}
+        >
           Anime
         </a>
-        <a href={`/search?type=manga${searchParams.title ? `&title=${searchParams.title}` : ""}`} style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: isManga ? "bold" : "normal", fontSize:"14px" }}>
+        
+          href={`/search?type=manga${searchParams.title ? `&title=${searchParams.title}` : ""}`}
+          style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: isManga ? "bold" : "normal", fontSize:"14px" }}
+        >
           Manga
         </a>
       </div>
