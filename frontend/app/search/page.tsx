@@ -68,21 +68,31 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
     totalLength = sortedMedias.allResultsLength;
   }
 
+  const animeTabStyle = {
+    padding: "8px 20px",
+    borderRadius: "4px 4px 0 0",
+    background: isManga ? "#222" : "#E11D48",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: isManga ? "normal" : "bold",
+    fontSize: "14px",
+  } as React.CSSProperties;
+
+  const mangaTabStyle = {
+    padding: "8px 20px",
+    borderRadius: "4px 4px 0 0",
+    background: isManga ? "#E11D48" : "#222",
+    color: "#fff",
+    textDecoration: "none",
+    fontWeight: isManga ? "bold" : "normal",
+    fontSize: "14px",
+  } as React.CSSProperties;
+
   return (
     <main id={styles.container}>
       <div style={{ display: "flex", gap: "8px", padding: "16px 16px 0", borderBottom: "1px solid #222", marginBottom: "8px" }}>
-        
-          href={animeTabHref}
-          style={{ padding: "8px 20px", borderRadius: "4px 4px 0 0", background: isManga ? "#222" : "#E11D48", color: "#fff", textDecoration: "none", fontWeight: isManga ? "normal" : "bold", fontSize: "14px" }}
-        >
-          Anime
-        </a>
-        
-          href={mangaTabHref}
-          style={{ padding: "8px 20px", borderRadius: "4px 4px 0 0", background: isManga ? "#E11D48" : "#222", color: "#fff", textDecoration: "none", fontWeight: isManga ? "bold" : "normal", fontSize: "14px" }}
-        >
-          Manga
-        </a>
+        <a href={animeTabHref} style={animeTabStyle}>Anime</a>
+        <a href={mangaTabHref} style={mangaTabStyle}>Manga</a>
       </div>
 
       <div id={styles.side_nav}>
