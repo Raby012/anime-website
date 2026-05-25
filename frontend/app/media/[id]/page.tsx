@@ -55,29 +55,36 @@ export default async function MediaPage({
 }) {
   const isOnMobileScreen = checkDeviceIsMobile(headers()) || false;
 
-  // Safe fetch with error handling
-  const mediaInfo = await getMediaInfo({
-    id: params.id,
-    accessToken: headers().get("Authorization")?.slice(7),
-  }).catch(() => null) as MediaDataFullInfo | null;
+  let mediaInfo: MediaDataFullInfo | null = null;
+  try {
+    mediaInfo = await getMediaInfo({
+      id: params.id,
+      accessToken: headers().get("Authorization")?.slice(7),
+    }) as MediaDataFullInfo | null;
+  } catch (err: any) {
+    console.error(`Failed to fetch media info for ID ${params.id}:`, err?.message || err);
+    mediaInfo = null;
+  }
 
   if (!mediaInfo) {
     return (
       <main id={styles.container}>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: "16px",
-          padding: "80px 20px",
-          color: "#fff",
-          textAlign: "center"
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            gap: "16px",
+            padding: "80px 20px",
+            color: "#fff",
+            textAlign: "center",
+          }}
+        >
           <p style={{ fontSize: "48px" }}>😔</p>
           <h2>Failed to load anime info</h2>
           <p style={{ color: "#aaa" }}>
-            This could be due to rate limiting. Please try again in a moment.
+            This could be due to rate limiting or an invalid ID. Please try again in a moment.
           </p>
           
             href="/"
@@ -86,7 +93,7 @@ export default async function MediaPage({
               textDecoration: "none",
               padding: "10px 24px",
               border: "1px solid #E11D48",
-              borderRadius: "6px"
+              borderRadius: "6px",
             }}
           >
             ← Go Home
@@ -96,15 +103,14 @@ export default async function MediaPage({
     );
   }
 
-  // IMDB info - safely fetch with null fallback (Consumet may be dead)
   let imdbMediaInfo: ImdbMediaInfo | null = null;
   try {
     const { getMediaInfoOnIMDB } = await import("@/app/api/consumet/consumetImdb");
-    imdbMediaInfo = await getMediaInfoOnIMDB({
+    imdbMediaInfo = (await getMediaInfoOnIMDB({
       search: true,
       seachTitle: mediaInfo.title.romaji,
       releaseYear: mediaInfo.startDate?.year,
-    }).catch(() => null) as ImdbMediaInfo | null;
+    }).catch(() => null)) as ImdbMediaInfo | null;
   } catch {
     imdbMediaInfo = null;
   }
@@ -145,14 +151,13 @@ export default async function MediaPage({
       return `linear-gradient(rgba(0, 0, 0, 0.05), var(--background) 100%), url(${mediaInfo?.coverImage?.extraLarge})`;
     } else {
       return `linear-gradient(rgba(0, 0, 0, 0.05), var(--background) 100%), url(${
-        mediaInfo.format == "MANGA" ? mediaInfo.bannerImage : randomizeBcgImg()
+        mediaInfo!.format == "MANGA" ? mediaInfo!.bannerImage : randomizeBcgImg()
       })`;
     }
   }
 
   return (
     <main id={styles.container}>
-      {/* BANNER or BACKGROUND COLOR */}
       <div
         id={styles.banner_background_container}
         style={{ background: bcgImgBasedOnScreenDisplay() }}
@@ -176,7 +181,6 @@ export default async function MediaPage({
         <section id={styles.info_container}>
           <div id={styles.description_episodes_related_container}>
 
-            {/* NEXT EPISODE */}
             {isOnMobileScreen == true &&
               mediaInfo.nextAiringEpisode &&
               mediaInfo.format != "MOVIE" && (
@@ -195,7 +199,6 @@ export default async function MediaPage({
                 </div>
               )}
 
-            {/* DESCRIPTION */}
             <section id={styles.description_container}>
               <h2 className={styles.heading_style}>DESCRIPTION</h2>
               {mediaInfo.description && (
@@ -203,14 +206,13 @@ export default async function MediaPage({
               )}
             </section>
 
-            {/* CAST */}
             {mediaInfo.characters?.edges?.[0] && (
               <section id={styles.cast_container}>
                 <h2 className={styles.heading_style}>CAST</h2>
                 <div>
                   <ul className="display_flex_row">
                     {mediaInfo.characters.edges.map((character, key) => (
-                      <li key={key} data-mediatype={mediaInfo.type}>
+                      <li key={key} data-mediatype={mediaInfo!.type}>
                         <div className={styles.character_container}>
                           <div className={styles.img_container}>
                             <Image
@@ -223,13 +225,16 @@ export default async function MediaPage({
                           <h3>{character.node.name.full}</h3>
                         </div>
 
-                        {mediaInfo.type == "ANIME" &&
+                        {mediaInfo!.type == "ANIME" &&
                           character.voiceActorRoles?.[0] && (
                             <div className={styles.actor_container}>
                               <div className={styles.img_container}>
                                 <Image
                                   src={character.voiceActorRoles[0].voiceActor.image.large}
-                                  alt={`${character.voiceActorRoles[0].voiceActor.name.full} voiceover for ${character.node.name.full}` || "No Name Actor"}
+                                  alt={
+                                    `${character.voiceActorRoles[0].voiceActor.name.full} voiceover for ${character.node.name.full}` ||
+                                    "No Name Actor"
+                                  }
                                   fill
                                   sizes="90px"
                                 />
@@ -244,7 +249,6 @@ export default async function MediaPage({
               </section>
             )}
 
-            {/* EPISODES - ONLY FOR ANIME */}
             {mediaInfo.type == "ANIME" &&
               mediaInfo.format != "MOVIE" &&
               mediaInfo.status != "NOT_YET_RELEASED" && (
@@ -263,7 +267,6 @@ export default async function MediaPage({
                 </section>
               )}
 
-            {/* CHAPTERS - ONLY FOR MANGAS */}
             {mediaInfo.type == "MANGA" && (
               <section>
                 <h2 className={styles.heading_style}>CHAPTERS</h2>
@@ -276,7 +279,6 @@ export default async function MediaPage({
               </section>
             )}
 
-            {/* RELATED TO THIS MEDIA */}
             {mediaInfo.relations?.nodes?.[0] && (
               <section id={styles.related_container}>
                 <div className="display_flex_row space_beetween align_items_center display_wrap">
@@ -290,12 +292,10 @@ export default async function MediaPage({
               </section>
             )}
 
-            {/* REVIEWS SECTION */}
             {mediaInfo.reviews?.nodes?.length > 0 && (
               <Reviews reviews={mediaInfo.reviews.nodes} />
             )}
 
-            {/* RECOMMENDATIONS */}
             {mediaInfo.recommendations?.edges?.[0] && (
               <section id={styles.similar_container}>
                 <h2 className={styles.heading_style}>
@@ -335,7 +335,6 @@ export default async function MediaPage({
           </div>
 
           <div id={styles.hype_container}>
-            {/* NEXT EPISODE - DESKTOP */}
             {isOnMobileScreen == false &&
               mediaInfo.nextAiringEpisode &&
               mediaInfo.format != "MOVIE" && (
@@ -354,8 +353,8 @@ export default async function MediaPage({
                 </div>
               )}
 
-            {/* SCORE */}
-            {(mediaInfo.averageScore || (imdbMediaInfo?.rating && imdbMediaInfo.rating != 0)) && (
+            {(mediaInfo.averageScore ||
+              (imdbMediaInfo?.rating && imdbMediaInfo.rating != 0)) && (
               <div id={styles.score_container}>
                 <h2 className={styles.heading_style}>SCORE</h2>
                 <ul>
@@ -383,7 +382,6 @@ export default async function MediaPage({
               </div>
             )}
 
-            {/* TRAILER */}
             {mediaInfo.trailer && (
               <div id={styles.yt_video_container}>
                 <h2 className={styles.heading_style}>TRAILER</h2>
