@@ -18,7 +18,6 @@ function SearchResultItemCard({
 }: SearchResultsTypes) {
   const elementId = useId();
 
-  // change title color to the informed on Item Data when hovered
   function changeHeadingColor(isHovering: boolean) {
     const el = document
       .getElementById(elementId)!
@@ -30,7 +29,6 @@ function SearchResultItemCard({
         mediaFromAnilist?.coverImage?.color || "var(--white-100)");
 
     el!.style.color = "var(--white-100)";
-
     return;
   }
 
@@ -50,41 +48,31 @@ function SearchResultItemCard({
     ? mediaFromAnilist.type
     : mediaFromOfflineDB?.type || "No Type Defined";
 
-  console.log(mediaFromAnilist);
+  // Determine if this is manga to use correct search type
+  const isManga = mediaType === "MANGA";
+  const searchType = isManga ? "manga" : "anime";
 
   return (
     <li
       id={elementId}
       className={styles.result_container}
-      onMouseEnter={() => {
-        changeHeadingColor(true);
-      }}
-      onMouseLeave={() => {
-        changeHeadingColor(false);
-      }}
+      onMouseEnter={() => changeHeadingColor(true)}
+      onMouseLeave={() => changeHeadingColor(false)}
     >
       <div className={styles.image_container} onClick={handleChoseResult}>
-        <Link
-          href={`/media/${
-            mediaFromAnilist?.id || mediaFromOfflineDB?.anilistId
-          }`}
-        >
+        <Link href={`/media/${mediaFromAnilist?.id || mediaFromOfflineDB?.anilistId}`}>
           <Image
             src={imgSource}
             alt={`Cover Art for ${mediaFromAnilist?.title.userPreferred}`}
             fill
             sizes="90px"
-          ></Image>
+          />
         </Link>
       </div>
 
       <div className={styles.result_info_container}>
         <h5 onClick={handleChoseResult}>
-          <Link
-            href={`/media/${
-              mediaFromAnilist?.id || mediaFromOfflineDB?.anilistId
-            }`}
-          >
+          <Link href={`/media/${mediaFromAnilist?.id || mediaFromOfflineDB?.anilistId}`}>
             {mediaTitle}
           </Link>
         </h5>
@@ -94,7 +82,10 @@ function SearchResultItemCard({
             <ul className={`display_flex_row ${styles.genres_container}`}>
               {mediaFromAnilist.genres.slice(0, 3).map((item: string, key) => (
                 <li key={key}>
-                  <Link href={`/genre/${item.toLowerCase()}`}>{item}</Link>
+                  {/* FIX: was /genre/${item} — caused Page Not Found */}
+                  <Link href={`/search?type=${searchType}&genre=[${item.toLowerCase()}]`}>
+                    {item}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -104,7 +95,8 @@ function SearchResultItemCard({
             <ul className={`display_flex_row ${styles.genres_container}`}>
               {mediaFromOfflineDB.tags.slice(0, 3).map((item: string, key) => (
                 <li key={key}>
-                  <Link href={`/genre/${item.toLowerCase()}`}>
+                  {/* FIX: was /genre/${item} — caused Page Not Found */}
+                  <Link href={`/search?type=anime&genre=[${item.toLowerCase()}]`}>
                     {item.slice(0, 1).toUpperCase() + item.slice(1)}
                   </Link>
                 </li>
