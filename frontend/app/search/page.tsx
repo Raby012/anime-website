@@ -28,9 +28,12 @@ type SearchPageTypes = {
 async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
   const isMobile = checkDeviceIsMobile(headers());
   const isManga = searchParams.type === "manga";
+  const titleParam = searchParams.title ? "&title=" + searchParams.title : "";
+  const animeTabHref = "/search?type=anime" + titleParam;
+  const mangaTabHref = "/search?type=manga" + titleParam;
 
   let results: any[] = [];
-  let lastUpdate = null;
+  let lastUpdate: string = new Date().toISOString();
   let totalLength = 0;
 
   if (isManga) {
@@ -43,8 +46,6 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
         page: searchParams.page ? Number(searchParams.page) : 1,
       }) as any[];
 
-      // Normalize AniList manga data to match MediaOnJSONFile shape
-      // so ResultsContainer can render it correctly
       results = (mangaResults || []).map((m: any) => ({
         anilistId: String(m.id),
         title: m.title?.userPreferred || m.title?.romaji || "Unknown",
@@ -56,11 +57,9 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
       }));
 
       totalLength = results.length;
-      lastUpdate = new Date().toISOString();
     } catch {
       results = [];
       totalLength = 0;
-      lastUpdate = new Date().toISOString();
     }
   } else {
     const sortedMedias = await animeDatabaseSearchMedias({ searchParams });
@@ -71,16 +70,16 @@ async function SearchPage({ searchParams }: { searchParams: SearchPageTypes }) {
 
   return (
     <main id={styles.container}>
-      <div style={{ display:"flex", gap:"8px", padding:"16px 16px 0", borderBottom:"1px solid #222", marginBottom:"8px" }}>
+      <div style={{ display: "flex", gap: "8px", padding: "16px 16px 0", borderBottom: "1px solid #222", marginBottom: "8px" }}>
         
-          href={`/search?type=anime${searchParams.title ? `&title=${searchParams.title}` : ""}`}
-          style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: !isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: !isManga ? "bold" : "normal", fontSize:"14px" }}
+          href={animeTabHref}
+          style={{ padding: "8px 20px", borderRadius: "4px 4px 0 0", background: isManga ? "#222" : "#E11D48", color: "#fff", textDecoration: "none", fontWeight: isManga ? "normal" : "bold", fontSize: "14px" }}
         >
           Anime
         </a>
         
-          href={`/search?type=manga${searchParams.title ? `&title=${searchParams.title}` : ""}`}
-          style={{ padding:"8px 20px", borderRadius:"4px 4px 0 0", background: isManga ? "#E11D48" : "#222", color:"#fff", textDecoration:"none", fontWeight: isManga ? "bold" : "normal", fontSize:"14px" }}
+          href={mangaTabHref}
+          style={{ padding: "8px 20px", borderRadius: "4px 4px 0 0", background: isManga ? "#E11D48" : "#222", color: "#fff", textDecoration: "none", fontWeight: isManga ? "bold" : "normal", fontSize: "14px" }}
         >
           Manga
         </a>
