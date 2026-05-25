@@ -1,3 +1,4 @@
+export const revalidate = 3600 // re-fetch data every 1 hour automatically
 export const dynamic = 'force-dynamic'
 import { MediaDataFullInfo } from "@/app/ts/interfaces/anilistMediaData";
 import React from "react";
