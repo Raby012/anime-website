@@ -23,50 +23,44 @@ const SOURCES: Source[] = [
   {
     name: "VidSrc 1",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vidsrcme.ru/embed/movie/${id}` : `https://vidsrcme.ru/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vidsrcme.ru/embed/movie/" + id : "https://vidsrcme.ru/embed/tv/" + id + "/" + s + "/" + e,
   },
   {
     name: "VidSrc 2",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vidsrcme.su/embed/movie/${id}` : `https://vidsrcme.su/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vidsrcme.su/embed/movie/" + id : "https://vidsrcme.su/embed/tv/" + id + "/" + s + "/" + e,
   },
   {
     name: "VidSrc 3",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vidsrc-me.ru/embed/movie/${id}` : `https://vidsrc-me.ru/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vidsrc-me.ru/embed/movie/" + id : "https://vidsrc-me.ru/embed/tv/" + id + "/" + s + "/" + e,
   },
   {
     name: "VidSrc 4",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vsrc.su/embed/movie/${id}` : `https://vsrc.su/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vsrc.su/embed/movie/" + id : "https://vsrc.su/embed/tv/" + id + "/" + s + "/" + e,
   },
   {
     name: "VidSrc 5",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vidsrc.to/embed/movie/${id}` : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vidsrc.to/embed/movie/" + id : "https://vidsrc.to/embed/tv/" + id + "/" + s + "/" + e,
   },
   {
     name: "2Embed",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://www.2embed.cc/embed/${id}` : `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`,
+      movie ? "https://www.2embed.cc/embed/" + id : "https://www.2embed.cc/embedtv/" + id + "&s=" + s + "&e=" + e,
   },
-  // Replaced dead EmbedSu → VidSrc CC
   {
     name: "VidSrc CC",
     getUrl: (id, s, e, movie) =>
-      movie ? `https://vidsrc.cc/v2/embed/movie/${id}` : `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}`,
+      movie ? "https://vidsrc.cc/v2/embed/movie/" + id : "https://vidsrc.cc/v2/embed/tv/" + id + "/" + s + "/" + e,
   },
-  // Replaced dead AutoEmbed → Smashy Stream
   {
     name: "SmashyStream",
     getUrl: (id, s, e, movie) =>
-      movie
-        ? `https://player.smashy.stream/movie/${id}`
-        : `https://player.smashy.stream/tv/${id}?s=${s}&e=${e}`,
+      movie ? "https://player.smashy.stream/movie/" + id : "https://player.smashy.stream/tv/" + id + "?s=" + s + "&e=" + e,
   },
 ];
-
-
 
 const EPISODES_PER_PAGE = 100;
 
@@ -93,16 +87,21 @@ export default function EpisodesContainer({
 
   const mediaAny = mediaInfo as any;
 
+  // Check AniList external links FIRST — most reliable source
   const imdbLinkFromAnilist = mediaAny.externalLinks?.find(
     (link: { site: string; url: string }) =>
       link.site === "IMDb" || link.url?.includes("imdb.com")
   );
   const imdbIdFromAnilist = imdbLinkFromAnilist?.url?.match(/tt\d+/)?.[0];
-  const imdbId = imdbIdFromTmdb || imdbIdFromAnilist || null;
+
+  // Use AniList IMDB ID first, then fallback to TMDB lookup
+  const imdbId = imdbIdFromAnilist || imdbIdFromTmdb || null;
 
   const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
   useEffect(() => {
+    // If we already have IMDB ID from AniList, skip TMDB search
+    // but still fetch seasons from TMDB for episode counts
     if (!TMDB_KEY) return;
 
     async function fetchFromTmdb() {
@@ -119,36 +118,60 @@ export default function EpisodesContainer({
 
         for (const searchTitle of titles) {
           if (!searchTitle) continue;
+
+          // FIX: add with_original_language=ja to only get Japanese anime
+          // This prevents matching wrong live-action shows
           if (year) {
             const res = await fetch(
-              `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}&first_air_date_year=${year}`
+              "https://api.themoviedb.org/3/search/tv?api_key=" + TMDB_KEY +
+              "&query=" + encodeURIComponent(searchTitle) +
+              "&first_air_date_year=" + year +
+              "&with_original_language=ja"
             );
             const data = await res.json();
-            if (data.results?.length > 0) { show = data.results[0]; break; }
+            if (data.results?.length > 0) {
+              show = data.results[0];
+              break;
+            }
           }
+
+          // Try without year but still Japanese only
           const res2 = await fetch(
-            `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(searchTitle)}`
+            "https://api.themoviedb.org/3/search/tv?api_key=" + TMDB_KEY +
+            "&query=" + encodeURIComponent(searchTitle) +
+            "&with_original_language=ja"
           );
           const data2 = await res2.json();
-          if (data2.results?.length > 0) { show = data2.results[0]; break; }
+          if (data2.results?.length > 0) {
+            show = data2.results[0];
+            break;
+          }
         }
 
-        if (!show) { setIsLoadingSeasons(false); return; }
+        if (!show) {
+          setIsLoadingSeasons(false);
+          return;
+        }
 
         const showRes = await fetch(
-          `https://api.themoviedb.org/3/tv/${show.id}?api_key=${TMDB_KEY}&append_to_response=external_ids`
+          "https://api.themoviedb.org/3/tv/" + show.id +
+          "?api_key=" + TMDB_KEY + "&append_to_response=external_ids"
         );
         const showData = await showRes.json();
 
-        const tmdbImdbId = showData.external_ids?.imdb_id;
-        if (tmdbImdbId) setImdbIdFromTmdb(tmdbImdbId);
+        // Only set TMDB IMDB ID if AniList didn't provide one
+        if (!imdbIdFromAnilist) {
+          const tmdbImdbId = showData.external_ids?.imdb_id;
+          if (tmdbImdbId) setImdbIdFromTmdb(tmdbImdbId);
+        }
 
-        // FIX: only seasons with episodes and season_number > 0
+        // Only seasons with episodes, skip specials (season 0)
         const seasons: TmdbSeason[] = (showData.seasons || []).filter(
           (s: TmdbSeason) => s.season_number > 0 && s.episode_count > 0
         );
         setTmdbSeasons(seasons);
         if (seasons.length > 0) setCurrSeasonEpisodes(seasons[0].episode_count);
+
       } catch (err) {
         console.error("TMDB fetch error:", err);
       }
@@ -169,7 +192,7 @@ export default function EpisodesContainer({
     }
   }, [selectedSeason, tmdbSeasons]);
 
-  // FIX: only IMDB seasons that have actual episodes
+  // Only valid IMDB seasons with actual episodes
   const validImdbSeasons = (imdb.mediaSeasons || []).filter(
     (season: any) =>
       season &&
@@ -243,7 +266,7 @@ export default function EpisodesContainer({
                 transition: "background 0.2s",
               }}
             >
-              S{season.season_number}
+              {"S" + season.season_number}
             </button>
           ))}
         </div>
@@ -270,7 +293,7 @@ export default function EpisodesContainer({
                   transition: "background 0.2s",
                 }}
               >
-                S{seasonNum}
+                {"S" + seasonNum}
               </button>
             );
           })}
@@ -283,11 +306,11 @@ export default function EpisodesContainer({
           <div style={{ width: "100%", height: "480px", display: "flex", alignItems: "center", justifyContent: "center", background: "#111", borderRadius: "8px", color: "#fff", flexDirection: "column", gap: "12px" }}>
             <div style={{ width: "40px", height: "40px", border: "3px solid #333", borderTop: "3px solid #E11D48", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
             <p style={{ color: "#aaa" }}>Finding streaming source...</p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
           </div>
         ) : embedUrl ? (
           <iframe
-            key={`${embedUrl}-${selectedSource}-${selectedSeason}-${selectedEpisode}`}
+            key={embedUrl + "-" + selectedSource + "-" + selectedSeason + "-" + selectedEpisode}
             src={embedUrl}
             width="100%"
             height="480px"
@@ -311,7 +334,7 @@ export default function EpisodesContainer({
         <div style={{ padding: "0 16px 16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
             <p style={{ color: "#aaa", fontSize: "13px" }}>
-              Season {selectedSeason} • Episode {selectedEpisode} / {totalEpisodes}
+              {"Season " + selectedSeason + " • Episode " + selectedEpisode + " / " + totalEpisodes}
             </p>
           </div>
 
@@ -324,7 +347,7 @@ export default function EpisodesContainer({
                   onClick={() => { setCurrPage(i); setSelectedEpisode(i * EPISODES_PER_PAGE + 1); }}
                   style={{ padding: "4px 10px", borderRadius: "4px", border: "none", background: currPage === i ? "#E11D48" : "#222", color: "#fff", cursor: "pointer", fontSize: "12px" }}
                 >
-                  {i * EPISODES_PER_PAGE + 1}-{Math.min((i + 1) * EPISODES_PER_PAGE, totalEpisodes)}
+                  {(i * EPISODES_PER_PAGE + 1) + "-" + Math.min((i + 1) * EPISODES_PER_PAGE, totalEpisodes)}
                 </button>
               ))}
             </div>
