@@ -19,6 +19,11 @@ type Source = {
   getUrl: (imdbId: string, season: number, episode: number, isMovie: boolean) => string;
 };
 
+type MalSource = {
+  name: string;
+  getUrl: (malId: number, episode: number) => string;
+};
+
 const SOURCES: Source[] = [
   {
     name: "VidSrc 1",
@@ -62,6 +67,17 @@ const SOURCES: Source[] = [
   },
 ];
 
+const MAL_SOURCES: MalSource[] = [
+  {
+    name: "AnimeZ",
+    getUrl: (malId, ep) => "https://2anime.xyz/embed/" + malId + "/" + ep,
+  },
+  {
+    name: "GogoAnime",
+    getUrl: (malId, ep) => "https://anitaku.pe/embed/" + malId + "-episode-" + ep,
+  },
+];
+
 const EPISODES_PER_PAGE = 100;
 
 type TmdbSeason = {
@@ -84,24 +100,22 @@ export default function EpisodesContainer({
   const [currSeasonEpisodes, setCurrSeasonEpisodes] = useState<number>(0);
   const [isLoadingSeasons, setIsLoadingSeasons] = useState<boolean>(false);
   const [imdbIdFromTmdb, setImdbIdFromTmdb] = useState<string | null>(null);
+  const [useMalSource, setUseMalSource] = useState(false);
+  const [selectedMalSource, setSelectedMalSource] = useState(0);
 
   const mediaAny = mediaInfo as any;
 
-  // Check AniList external links FIRST — most reliable source
   const imdbLinkFromAnilist = mediaAny.externalLinks?.find(
     (link: { site: string; url: string }) =>
       link.site === "IMDb" || link.url?.includes("imdb.com")
   );
   const imdbIdFromAnilist = imdbLinkFromAnilist?.url?.match(/tt\d+/)?.[0];
-
-  // Use AniList IMDB ID first, then fallback to TMDB lookup
   const imdbId = imdbIdFromAnilist || imdbIdFromTmdb || null;
+  const malId: number | null = mediaAny.idMal || null;
 
   const TMDB_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
   useEffect(() => {
-    // If we already have IMDB ID from AniList, skip TMDB search
-    // but still fetch seasons from TMDB for episode counts
     if (!TMDB_KEY) return;
 
     async function fetchFromTmdb() {
@@ -119,8 +133,6 @@ export default function EpisodesContainer({
         for (const searchTitle of titles) {
           if (!searchTitle) continue;
 
-          // FIX: add with_original_language=ja to only get Japanese anime
-          // This prevents matching wrong live-action shows
           if (year) {
             const res = await fetch(
               "https://api.themoviedb.org/3/search/tv?api_key=" + TMDB_KEY +
@@ -129,29 +141,19 @@ export default function EpisodesContainer({
               "&with_original_language=ja"
             );
             const data = await res.json();
-            if (data.results?.length > 0) {
-              show = data.results[0];
-              break;
-            }
+            if (data.results?.length > 0) { show = data.results[0]; break; }
           }
 
-          // Try without year but still Japanese only
           const res2 = await fetch(
             "https://api.themoviedb.org/3/search/tv?api_key=" + TMDB_KEY +
             "&query=" + encodeURIComponent(searchTitle) +
             "&with_original_language=ja"
           );
           const data2 = await res2.json();
-          if (data2.results?.length > 0) {
-            show = data2.results[0];
-            break;
-          }
+          if (data2.results?.length > 0) { show = data2.results[0]; break; }
         }
 
-        if (!show) {
-          setIsLoadingSeasons(false);
-          return;
-        }
+        if (!show) { setIsLoadingSeasons(false); return; }
 
         const showRes = await fetch(
           "https://api.themoviedb.org/3/tv/" + show.id +
@@ -159,13 +161,11 @@ export default function EpisodesContainer({
         );
         const showData = await showRes.json();
 
-        // Only set TMDB IMDB ID if AniList didn't provide one
         if (!imdbIdFromAnilist) {
           const tmdbImdbId = showData.external_ids?.imdb_id;
           if (tmdbImdbId) setImdbIdFromTmdb(tmdbImdbId);
         }
 
-        // Only seasons with episodes, skip specials (season 0)
         const seasons: TmdbSeason[] = (showData.seasons || []).filter(
           (s: TmdbSeason) => s.season_number > 0 && s.episode_count > 0
         );
@@ -192,7 +192,6 @@ export default function EpisodesContainer({
     }
   }, [selectedSeason, tmdbSeasons]);
 
-  // Only valid IMDB seasons with actual episodes
   const validImdbSeasons = (imdb.mediaSeasons || []).filter(
     (season: any) =>
       season &&
@@ -208,9 +207,11 @@ export default function EpisodesContainer({
     imdb.episodesList.length ||
     12;
 
-  const embedUrl = imdbId
-    ? SOURCES[selectedSource].getUrl(imdbId, selectedSeason, selectedEpisode, mediaInfo.format === "MOVIE")
-    : null;
+  const embedUrl = useMalSource && malId
+    ? MAL_SOURCES[selectedMalSource].getUrl(malId, selectedEpisode)
+    : imdbId
+      ? SOURCES[selectedSource].getUrl(imdbId, selectedSeason, selectedEpisode, mediaInfo.format === "MOVIE")
+      : null;
 
   const totalPages = Math.ceil(totalEpisodes / EPISODES_PER_PAGE);
   const startEp = currPage * EPISODES_PER_PAGE + 1;
@@ -224,18 +225,18 @@ export default function EpisodesContainer({
         <h2 className={styles.heading_style}>EPISODES</h2>
       </div>
 
-      {/* Server Selector */}
+      {/* Main Server Selector */}
       <div style={{ padding: "8px 16px", display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ color: "#aaa", fontSize: "13px" }}>Server:</span>
         {SOURCES.map((source, idx) => (
           <button
             key={idx}
-            onClick={() => setSelectedSource(idx)}
+            onClick={() => { setSelectedSource(idx); setUseMalSource(false); }}
             style={{
               padding: "5px 12px",
               borderRadius: "4px",
               border: "none",
-              background: selectedSource === idx ? "#E11D48" : "#333",
+              background: !useMalSource && selectedSource === idx ? "#E11D48" : "#333",
               color: "#fff",
               cursor: "pointer",
               fontSize: "13px",
@@ -246,6 +247,38 @@ export default function EpisodesContainer({
           </button>
         ))}
       </div>
+
+      {/* Alt MAL Sources */}
+      {malId && !isMovie && (
+        <div style={{ padding: "4px 16px 8px", display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ color: "#777", fontSize: "12px" }}>Alt Sources:</span>
+          {MAL_SOURCES.map((source, idx) => (
+            <button
+              key={idx}
+              onClick={() => { setUseMalSource(true); setSelectedMalSource(idx); }}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "4px",
+                border: "none",
+                background: useMalSource && selectedMalSource === idx ? "#7c3aed" : "#2a2a2a",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              {source.name}
+            </button>
+          ))}
+          {useMalSource && (
+            <button
+              onClick={() => setUseMalSource(false)}
+              style={{ padding: "4px 10px", borderRadius: "4px", border: "1px solid #444", background: "transparent", color: "#aaa", cursor: "pointer", fontSize: "12px" }}
+            >
+              Back to main
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Season Selector - TMDB */}
       {!isMovie && tmdbSeasons.length > 1 && (
@@ -263,7 +296,6 @@ export default function EpisodesContainer({
                 color: "#fff",
                 cursor: "pointer",
                 fontSize: "13px",
-                transition: "background 0.2s",
               }}
             >
               {"S" + season.season_number}
@@ -290,7 +322,6 @@ export default function EpisodesContainer({
                   color: "#fff",
                   cursor: "pointer",
                   fontSize: "13px",
-                  transition: "background 0.2s",
                 }}
               >
                 {"S" + seasonNum}
@@ -323,7 +354,7 @@ export default function EpisodesContainer({
             <p style={{ fontSize: "32px" }}>😔</p>
             <h3>Streaming Unavailable</h3>
             <p style={{ color: "#aaa", textAlign: "center", maxWidth: "360px", fontSize: "14px" }}>
-              {!TMDB_KEY ? "TMDB API key not configured." : "Could not find this anime on streaming servers. Try a different server above."}
+              {!TMDB_KEY ? "TMDB API key not configured." : "Try Alt Sources (AnimeZ or GogoAnime) above — they work for almost all anime."}
             </p>
           </div>
         )}
